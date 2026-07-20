@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Credit Card Fraud Detection</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    
+
+<div class="container">
+
+    <h1>💳 Credit Card Fraud Detection</h1>
+
+    <p class="subtitle">
+        AI Powered Credit Card Fraud Detection using Machine Learning
+    </p>
+
+    <!-- ========================= -->
+    <!-- SINGLE TRANSACTION -->
+    <!-- ========================= -->
+
+    <button
+        type="button"
+        class="toggle-btn"
+        onclick="toggleForm()">
+
+        ▼ Enter Custom Transaction
+
+    </button>
+
+    <form
+        action="/predict_single"
+        method="POST">
+
+        <div
+            id="transactionForm"
+            class="grid hidden">
+
+            <div class="form-group">
+                <label>Time</label>
+
+                <input
+                    type="number"
+                    step="any"
+                    name="Time"
+                    required>
+            </div>
+
+            {% for i in range(1,29) %}
+
+            <div class="form-group">
+
+                <label>V{{i}}</label>
+
+                <input
+                    type="number"
+                    step="any"
+                    name="V{{i}}"
+                    required>
+
+            </div>
+
+            {% endfor %}
+
+            <div class="form-group">
+
+                <label>Amount</label>
+
+                <input
+                    type="number"
+                    step="any"
+                    name="Amount"
+                    required>
+
+            </div>
+
+        </div>
+
+        <div class="button-group">
+
+            <button
+                type="button"
+                onclick="fillNormal()">
+
+                🟢 Sample Normal
+
+            </button>
+
+            <button
+                type="button"
+                onclick="fillFraud()">
+
+                🔴 Sample Fraud
+
+            </button>
+
+        </div>
+
+        <button
+            type="submit"
+            class="predict-btn">
+
+            🔍 Predict Single Transaction
+
+        </button>
+
+    </form>
+
+    <hr class="divider">
+
+    <!-- ========================= -->
+    <!-- CSV PREDICTION -->
+    <!-- ========================= -->
+
+    <h2 class="upload-title">
+
+        📂 Batch CSV Prediction
+
+    </h2>
+
+    <form
+        action="/predict_csv"
+        method="POST"
+        enctype="multipart/form-data"
+        onsubmit="showLoader()">
+
+        <div id="loader" class="loader hidden">
+
+            <div class="spinner"></div>
+
+            <p>Analyzing transactions...</p>
+
+        </div>
+        <div class="upload-box">
+
+            <input
+                type="file"
+                name="csv_file"
+                accept=".csv"
+                required>
+
+        </div>
+        <div class="sample-download">
+            <a href="{{ url_for('download_sample_csv') }}" class="download-btn sample-btn">
+                📥 Download Sample CSV
+            </a>
+            <p class="sample-note">
+                Don't have a dataset? Download our sample CSV and test the system instantly.
+            </p>
+        </div>
+        <button
+            type="submit"
+            class="predict-btn">
+
+            📊 Predict CSV
+
+        </button>
+
+    </form>
+
+    <!-- ========================= -->
+    <!-- ERROR -->
+    <!-- ========================= -->
+
+    {% if error %}
+
+    <div class="result">
+
+        <div class="result-card fraud-card">
+
+            <h2>{{ error }}</h2>
+
+        </div>
+
+    </div>
+
+    {% endif %}
+
+    <!-- ========================= -->
+    <!-- SINGLE RESULT -->
+    <!-- ========================= -->
+
+    {% if prediction %}
+
+    <div class="result">
+
+        {% if prediction == "Fraudulent Transaction" %}
+
+        <div class="result-card fraud-card">
+
+            <h2>
+                🚨 Fraudulent Transaction
+            </h2>
+
+            <p>
+                This transaction is likely fraudulent.
+            </p>
+
+            <h3>
+                Confidence : {{ confidence }}%
+            </h3>
+
+        </div>
+
+        {% else %}
+
+        <div class="result-card normal-card">
+
+            <h2>
+                ✅ Normal Transaction
+            </h2>
+
+            <p>
+                This transaction appears legitimate.
+            </p>
+
+            <h3>
+                Confidence : {{ confidence }}%
+            </h3>
+
+        </div>
+
+        {% endif %}
+
+    </div>
+
+    {% endif %}
+
+    <!-- ========================= -->
+    <!-- CSV RESULTS -->
+    <!-- ========================= -->
+
+    {% if csv_table %}
+
+    <!-- Dashboard Cards -->
+
+    <div class="stats-grid">
+
+    <div class="stat-card">
+        <div class="icon">📊</div>
+        <h3>Total Transactions</h3>
+        <h2>{{ total }}</h2>
+    </div>
+
+    <div class="stat-card">
+        <div class="icon">✅</div>
+        <h3>Normal Transactions</h3>
+        <h2>{{ normal }}</h2>
+    </div>
+
+    <div class="stat-card">
+        <div class="icon">🚨</div>
+        <h3>Fraud Transactions</h3>
+        <h2>{{ fraud }}</h2>
+    </div>
+
+    <div class="stat-card">
+        <div class="icon">🎯</div>
+        <h3>Model Accuracy</h3>
+        <h2>{{ accuracy }}%</h2>
+    </div>
+
+</div>
+<div class="info-panel">
+    <p>
+        📂 <strong>Uploaded File:</strong>
+        {{ filename }}
+    </p>
+    
+
+    <p>
+        ⏱ <strong>Prediction Time:</strong>
+        {{ prediction_time }} sec
+    </p>
+</div>
+<!-- Pie Chart -->
+
+<div class="charts">
+
+    <div class="chart-box">
+        <canvas id="fraudChart"></canvas>   
+     </div>
+
+    <div class="chart-box">
+        <canvas id="barChart"></canvas>
+    </div>
+
+</div>
+<script>
+
+const barCtx = document.getElementById("barChart");
+
+new Chart(barCtx, {
+
+    type: 'bar',
+
+    data: {
+
+        labels: ['Normal', 'Fraud'],
+
+        datasets: [{
+
+            label: 'Transactions',
+
+            data: [{{ normal }}, {{ fraud }}]
+
+        }]
+
+    },
+
+    options: {
+
+        responsive:true,
+
+        plugins:{
+            legend:{
+                display:false
+            }
+        }
+
+    }
+
+});
+
+</script>
+
+<br>
+
+<div class="csv-results">
+
+    <h2>
+
+        📊 CSV Prediction Results
+
+    </h2>
+
+    <div class="table-container">
+        <!-- Search & Filter -->
+        <div class="search-filter-container">
+
+            <input
+                type="text"
+                id="searchInput"
+                placeholder="🔍 Search Transaction, Prediction or Confidence..."
+        >
+
+            <select id="filterSelect">
+                <option value="all">All Transactions</option>
+                <option value="Normal">Normal</option>
+                <option value="Fraud">Fraud</option>
+            </select>
+
+        </div>
+
+        {{ csv_table|safe }}
+
+    </div>
+    <div class="pagination-container">
+
+        <button id="prevBtn" class="page-btn">
+            ⬅ Previous
+        </button>
+
+        <span id="pageInfo"></span>
+
+        <button id="nextBtn" class="page-btn">
+            Next ➡
+        </button>
+
+    </div>
+    
+
+
+    <br>
+
+    <div class="report-buttons">
+
+    <a href="/download" class="download-btn">
+        ⬇ Download CSV
+    </a>
+
+    <a href="/download_excel" class="download-btn excel-btn">
+        📊 Download Excel
+    </a>
+
+    <a href="/download_pdf" class="download-btn pdf-btn">
+        📄 Download PDF
+    </a>
+
+    <button
+        onclick="printDashboard()"
+        class="download-btn print-btn">
+
+        🖨 Print Report
+
+    </button>
+
+</div>
+
+</div>
+
+<!-- Chart Script -->
+
+<script>
+    
+
+const ctx = document.getElementById('fraudChart');
+
+new Chart(ctx, {
+
+    type: 'doughnut',
+
+    data: {
+
+        labels: ['Normal', 'Fraud'],
+
+        datasets: [{
+
+            data: [{{ normal }}, {{ fraud }}],
+
+            backgroundColor: [
+
+                '#28a745',
+
+                '#dc3545'
+
+            ],
+
+            borderWidth: 2
+
+        }]
+
+    },
+
+
+    options: {
+        responsive: true,
+        cutout: '65%',
+
+        plugins: {
+            title: {
+                display: true,
+                text: 'Fraud Detection Summary'
+            },
+            legend: {
+                position: 'bottom'
+            }
+        }
+    }
+
+});
+
+</script>
+
+
+{% endif %}
+
+    <!-- ========================= -->
+    <!-- FOOTER -->
+    <!-- ========================= -->
+
+    <footer>
+
+        <hr>
+
+        <p>
+
+            <strong>Model:</strong> Random Forest Classifier
+
+            <br><br>
+
+            Built using Flask, Scikit-learn, Pandas,
+            NumPy, HTML, CSS & JavaScript.
+            <div class="developer-info">
+                <p><strong>Developed By:</strong> Venkata Vijay Kumar Kareti</p>
+            </div>
+
+        </p>
+
+    </footer>
+
+</div>
+
+<script
+src="{{ url_for('static', filename='script.js') }}">
+
+</script>
+    
+    
+
+</body>
+</html>
