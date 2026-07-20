@@ -112,7 +112,7 @@ CreditCardFraudDetection/
 
 ## Home Page
 
-![Home](screenshots/home.png)
+![Home](screenshots/homne.png)
 
 ---
 
